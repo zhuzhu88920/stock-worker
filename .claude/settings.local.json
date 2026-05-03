@@ -14,7 +14,11 @@
       "Bash(curl -s \"https://m.stock.naver.com/api/stock/000660/basic\")",
       "Bash(curl *)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(git branch *)"
     ]
   }
 }

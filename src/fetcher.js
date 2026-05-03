@@ -3,8 +3,6 @@
  * 从各数据源抓取股价数据
  */
 
-import fetch from 'node-fetch';
-
 export class Fetcher {
   constructor(config, env) {
     this.config = config;

@@ -37,7 +37,7 @@ async function handleTrigger(env) {
     const config = new Config(env);
     const scheduler = new Scheduler(config);
     const fetcher = new Fetcher(config);
-    const storage = new Storage(env.DB);
+    const storage = new Storage(env.STORAGE);
     const pusher = new Pusher(env.BARK_URL);
 
     // 获取当前时间

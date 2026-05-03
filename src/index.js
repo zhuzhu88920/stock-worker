@@ -8,6 +8,7 @@ import { Scheduler } from './scheduler.js';
 import { Fetcher } from './fetcher.js';
 import { Storage } from './storage.js';
 import { Pusher } from './pusher.js';
+import { TemplateParser } from './template-parser.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -39,6 +40,13 @@ async function handleTrigger(env) {
     const fetcher = new Fetcher(config);
     const storage = new Storage(env.STORAGE);
     const pusher = new Pusher(env.BARK_URL);
+
+    // 加载模板配置
+    const templateParser = new TemplateParser();
+    const templateStr = await env.CONFIG.get('template');
+    if (templateStr) {
+      templateParser.loadFromString(templateStr);
+    }
 
     // 获取当前时间
     const now = new Date();
@@ -89,7 +97,7 @@ async function handleTrigger(env) {
     await storage.saveData(currentData);
 
     // 构建推送内容
-    const pushData = buildPushData(openMarkets, currentData, lastData, timeStr);
+    const pushData = buildPushData(openMarkets, currentData, lastData, timeStr, config, templateParser);
 
     // 推送
     await pusher.push(pushData);
@@ -145,12 +153,11 @@ function compareData(currentData, lastData) {
 /**
  * 构建推送数据
  */
-function buildPushData(openMarkets, currentData, lastData, timeStr) {
+function buildPushData(openMarkets, currentData, lastData, timeStr, config, templateParser) {
   const now = new Date();
   const dateStr = now.toLocaleString('zh-CN', {
     timeZone: 'Asia/Shanghai',
     hour12: false,
-    year: 'numeric',
     month: '2-digit',
     day: '2-digit'
   });
@@ -164,17 +171,27 @@ function buildPushData(openMarkets, currentData, lastData, timeStr) {
   // 构建标题 - 显示所有市场状态
   const allMarkets = ['cn_fund', 'hk', 'kr', 'us'];
   const marketStatus = allMarkets.map(market => {
-    const config = new Config().getMarketConfig(market);
+    const marketConfig = config.getMarketConfig(market);
     const isOpen = openMarkets.includes(market);
     const status = isOpen ? '开' : '休';
-    return `${config.flag}${status}`;
+    return `${marketConfig.flag}${status}`;
   }).join('  ');
 
-  const title = `${marketStatus}   📅 ${dateStr}  ⏰ ${timeOnly}`;
+  // 使用模板渲染标题
+  let title;
+  if (templateParser && templateParser.getTemplates().title) {
+    title = templateParser.renderTitle({
+      market_status: marketStatus,
+      date: dateStr,
+      time: timeOnly
+    });
+  } else {
+    title = `${marketStatus}   📅 ${dateStr}  ⏰ ${timeOnly}`;
+  }
 
   // 构建内容
   const content = currentData.map(item => {
-    const marketConfig = new Config().getMarketConfig(item.market);
+    const marketConfig = config.getMarketConfig(item.market);
 
     // 简化基金名称
     let name = item.name;
@@ -183,16 +200,44 @@ function buildPushData(openMarkets, currentData, lastData, timeStr) {
       name = name.replace(/\([^)]*\)/g, '').trim();
     }
 
+    // 使用模板简化名称
+    if (templateParser) {
+      name = templateParser.simplifyName(name);
+    }
+
     // 涨跌方向图标
     const changePercent = parseFloat(item.change_percent) || 0;
-    const trendIcon = changePercent > 0 ? '📈' : changePercent < 0 ? '📉' : '➡️';
+    const trend = changePercent > 0 ? '📈' : changePercent < 0 ? '📉' : '➡️';
 
-    if (item.market === 'cn_fund') {
-      // 基金格式: 🇨🇳 基金名 💰净值 📈涨跌幅 | 净值日期
-      return `${marketConfig.flag} ${name} 💰${item.price} ${trendIcon}${item.change_percent} | ${item.nav_date}`;
+    // 格式化净值日期
+    let navDateShort = '';
+    if (item.nav_date) {
+      const dateParts = item.nav_date.split('-');
+      if (dateParts.length === 3) {
+        navDateShort = `${dateParts[1]}-${dateParts[2]}`;
+      }
+    }
+
+    // 使用模板渲染内容
+    if (templateParser && templateParser.getTemplates().content[item.market]) {
+      return templateParser.renderContent(item.market, {
+        flag: marketConfig.flag,
+        name: name,
+        code: item.code,
+        price: item.price,
+        change_amount: item.change_amount || '',
+        change_percent: item.change_percent,
+        trend: trend,
+        nav_date: item.nav_date || '',
+        nav_date_short: navDateShort
+      });
     } else {
-      // 股票格式: 🇰🇷 股票名 💰价格 📈涨跌额(涨跌幅)
-      return `${marketConfig.flag} ${name} 💰${item.price} ${trendIcon}${item.change_amount}(${item.change_percent})`;
+      // 默认格式
+      if (item.market === 'cn_fund') {
+        return `${marketConfig.flag} ${name} 💰${item.price} ${trend}${item.change_percent} | ${item.nav_date}`;
+      } else {
+        return `${marketConfig.flag} ${name} 💰${item.price} ${trend}${item.change_amount}(${item.change_percent})`;
+      }
     }
   }).join('\n');
 

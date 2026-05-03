@@ -31,6 +31,7 @@ jobs:
       - name: Upload config to KV
         run: |
           npx wrangler kv:key put --namespace-id="4010908b8c564128a7f3bba963f99790" "config" "$(cat config.toml)"
+          npx wrangler kv:key put --namespace-id="4010908b8c564128a7f3bba963f99790" "template" "$(cat push-template.toml)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 7eeac3798da0cafbdd84901d4d9fab18

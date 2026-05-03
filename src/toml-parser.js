@@ -3,8 +3,6 @@
  * 简化版TOML解析器
  */
 
-import fs from 'fs';
-
 export class TomlParser {
   /**
    * 解析TOML字符串
@@ -145,13 +143,5 @@ export class TomlParser {
     }
 
     return value;
-  }
-
-  /**
-   * 从文件加载配置
-   */
-  static loadFile(filePath) {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return this.parse(content);
   }
 }

@@ -1,27 +1,18 @@
 /**
  * 模板解析器
- * 解析推送模板配置文件
+ * 解析推送模板配置
  */
 
-import fs from 'fs';
-import path from 'path';
-
 export class TemplateParser {
-  constructor(templatePath = null) {
-    this.templatePath = templatePath || path.join(process.cwd(), 'push-template.toml');
+  constructor() {
     this.templates = null;
     this.nameRules = null;
   }
 
   /**
-   * 加载模板文件
+   * 从字符串加载模板
    */
-  load() {
-    if (!fs.existsSync(this.templatePath)) {
-      throw new Error(`Template file not found: ${this.templatePath}`);
-    }
-
-    const content = fs.readFileSync(this.templatePath, 'utf-8');
+  loadFromString(content) {
     this.parse(content);
   }
 

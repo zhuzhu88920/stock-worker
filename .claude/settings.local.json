@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.nyse.com)",
+      "Bash(Get-ChildItem -Recurse -Force)",
+      "Bash(Select-Object FullName, Length, LastWriteTime)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(node *)",
+      "Bash(curl -s \"https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=1&plat=Android&appType=ttjj&product=EFund&Version=1&Fcodes=005698&deviceid=123456\")",
+      "Bash(curl -s \"https://push2.eastmoney.com/api/qt/stock/get?secid=116.07709&fields=f43,f44,f45,f46,f47,f48,f57,f58,f152,f169,f170&ut=fa5fd1943c7b386f172d6893dbbd1d0c\")",
+      "Bash(curl -s \"https://m.stock.naver.com/api/stock/000660/basic\")",
+      "Bash(curl *)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

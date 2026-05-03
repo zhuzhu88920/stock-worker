@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.local
+
+# Wrangler
+.wrangler/
+wrangler.toml.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp

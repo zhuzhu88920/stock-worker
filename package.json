@@ -1,0 +1,29 @@
+{
+  "name": "stock-worker",
+  "version": "1.0.0",
+  "description": "Stock price monitoring and push notification service",
+  "main": "src/index.js",
+  "license": "MIT",
+  "keywords": [
+    "stock",
+    "finance",
+    "cloudflare",
+    "workers",
+    "bark"
+  ],
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "db:init": "wrangler d1 execute stock-worker-db --file=./schema.sql",
+    "db:query": "wrangler d1 execute stock-worker-db --command"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "iconv-lite": "^0.7.2",
+    "node-fetch": "^3.3.2"
+  }
+}

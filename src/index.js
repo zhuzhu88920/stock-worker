@@ -36,6 +36,7 @@ async function handleTrigger(env) {
   try {
     // 初始化各模块
     const config = new Config(env);
+    await config.getConfig(); // 加载配置
     const scheduler = new Scheduler(config);
     const fetcher = new Fetcher(config);
     const storage = new Storage(env.STORAGE);

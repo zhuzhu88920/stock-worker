@@ -2,6 +2,9 @@ name = "stock-worker"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
+# Cloudflare 账户 ID
+account_id = "7eeac3798da0cafbdd84901d4d9fab18"
+
 # D1 数据库绑定
 [[d1_databases]]
 binding = "DB"
@@ -11,7 +14,7 @@ database_id = "your-database-id"
 # KV 命名空间 (用于存储配置)
 [[kv_namespaces]]
 binding = "CONFIG"
-id = "your-kv-namespace-id"
+id = "4010908b8c564128a7f3bba963f99790"
 
 # 环境变量
 [vars]

@@ -26,20 +26,18 @@ jobs:
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 7eeac3798da0cafbdd84901d4d9fab18
 
       - name: Upload config to KV
         run: |
-          KV_ID=$(grep -A 2 'kv_namespaces' wrangler.toml | grep 'id' | cut -d'"' -f4)
-          npx wrangler kv:key put --namespace-id="$KV_ID" "config" "$(cat config.toml)"
+          npx wrangler kv:key put --namespace-id="4010908b8c564128a7f3bba963f99790" "config" "$(cat config.toml)"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 7eeac3798da0cafbdd84901d4d9fab18
 
       - name: Initialize D1 database
         run: |
-          DB_ID=$(grep -A 2 'd1_databases' wrangler.toml | grep 'database_id' | cut -d'"' -f4)
           npx wrangler d1 execute stock-worker-db --file=schema.sql
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 7eeac3798da0cafbdd84901d4d9fab18

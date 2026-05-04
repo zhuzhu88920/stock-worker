@@ -26,6 +26,11 @@ export default {
 
     // Cron 触发
     return await handleTrigger(env);
+  },
+
+  async scheduled(event, env, ctx) {
+    // Cron 触发器调用
+    await handleTrigger(env);
   }
 };
 

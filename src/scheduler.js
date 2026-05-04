@@ -28,17 +28,8 @@ export class Scheduler {
    * 判断市场是否开市
    */
   isMarketOpen(market, now = new Date()) {
-    // 检查是否为休假日
-    if (this.isHoliday(market, now)) {
-      return false;
-    }
-
-    // 检查是否为周末
-    if (this.isWeekend(market, now)) {
-      return false;
-    }
-
-    // 检查是否在交易时段内
+    if (this.isHoliday(market, now)) return false;
+    if (this.isWeekend(market, now)) return false;
     return this.isInTradingHours(market, now);
   }
 
@@ -52,20 +43,54 @@ export class Scheduler {
   }
 
   /**
+   * 核心方法：使用 Intl.DateTimeFormat 获取目标时区的精准时间字符串
+   * 彻底避免 new Date() 的毫秒运算产生的环境兼容性 Bug
+   */
+  getMarketTimeParts(date, timezone) {
+    const options = {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'short'
+    };
+    
+    // 生成类似: "10/24/2023, 14:30" (基于 en-US 格式保证稳定解析)
+    const formatter = new Intl.DateTimeFormat('en-US', options);
+    const parts = formatter.formatToParts(date);
+    
+    const getPart = (type) => {
+      const part = parts.find(p => p.type === type);
+      return part ? part.value : '';
+    };
+
+    // 特殊处理 24:00 的情况（部分环境 en-US 会将 00:00 格式化为 24:00）
+    let hour = parseInt(getPart('hour'), 10);
+    if (hour === 24) hour = 0;
+
+    return {
+      year: getPart('year'),
+      month: getPart('month'),
+      day: getPart('day'),
+      hour: String(hour).padStart(2, '0'),
+      minute: getPart('minute'),
+      weekday: getPart('weekday') // 返回 Sun, Mon, Tue 等
+    };
+  }
+
+  /**
    * 判断是否为周末
    */
   isWeekend(market, now = new Date()) {
     const marketConfig = this.config.getMarketConfig(market);
-
-    // 获取市场时区
     const timezone = marketConfig.timezone || 'Asia/Shanghai';
-
-    // 转换为市场时区
-    const marketDate = this.toMarketTime(now, timezone);
-    const marketDay = marketDate.getDay();
-
-    // 周六(6)或周日(0)为周末
-    return marketDay === 0 || marketDay === 6;
+    
+    // 获取市场时区的具体时间信息
+    const parts = this.getMarketTimeParts(now, timezone);
+    return parts.weekday === 'Sun' || parts.weekday === 'Sat';
   }
 
   /**
@@ -75,11 +100,10 @@ export class Scheduler {
     const marketConfig = this.config.getMarketConfig(market);
     const timezone = marketConfig.timezone || 'Asia/Shanghai';
 
-    // 转换为市场时区
-    const marketTime = this.toMarketTime(now, timezone);
-    const currentTime = this.formatTime(marketTime);
+    // 直接获取市场时区的 小时:分钟
+    const parts = this.getMarketTimeParts(now, timezone);
+    const currentTime = `${parts.hour}:${parts.minute}`;
 
-    // 获取交易时段
     let tradingHours = marketConfig.trading_hours;
 
     // 美股需要判断夏令时/冬令时
@@ -109,31 +133,19 @@ export class Scheduler {
    * 判断是否为夏令时 (美国)
    */
   isDST(date = new Date()) {
-    // 美国夏令时: 3月第二个周日 - 11月第一个周日
     const year = date.getFullYear();
-    const month = date.getMonth();
+    const month = date.getMonth(); // 0-11
 
-    // 1月、2月、12月为冬令时
-    if (month < 2 || month > 10) {
-      return false;
-    }
+    if (month < 2 || month > 10) return false;
+    if (month > 2 && month < 10) return true;
 
-    // 4月-10月为夏令时
-    if (month > 2 && month < 10) {
-      return true;
-    }
-
-    // 3月和11月需要具体判断
-    if (month === 2) {
-      // 3月第二个周日
+    if (month === 2) { // 3月第二个周日
       const secondSunday = this.getNthDayOfMonth(year, 2, 0, 2);
       return date.getDate() >= secondSunday;
-    } else if (month === 10) {
-      // 11月第一个周日
+    } else if (month === 10) { // 11月第一个周日
       const firstSunday = this.getNthDayOfMonth(year, 10, 0, 1);
       return date.getDate() < firstSunday;
     }
-
     return false;
   }
 
@@ -143,77 +155,24 @@ export class Scheduler {
   getNthDayOfMonth(year, month, dayOfWeek, n) {
     const date = new Date(year, month, 1);
     let count = 0;
-
     while (date.getMonth() === month) {
       if (date.getDay() === dayOfWeek) {
         count++;
-        if (count === n) {
-          return date.getDate();
-        }
+        if (count === n) return date.getDate();
       }
       date.setDate(date.getDate() + 1);
     }
-
     return -1;
   }
 
   /**
-   * 转换为市场时区
-   */
-  toMarketTime(date, timezone) {
-    // 获取 UTC 时间戳（去除本地时区的影响）
-    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-    
-    // 获取目标时区偏移 (小时)
-    const offset = this.getTimezoneOffset(timezone, date);
-    
-    // 【修复核心 BUG】：
-    // offset 是小时，必须乘以 3600000 (60分钟 * 60秒 * 1000毫秒) 才能转换为毫秒
-    return new Date(utc + (offset * 3600000));
-  }
-
-  /**
-   * 获取时区偏移 (小时)
-   */
-  getTimezoneOffset(timezone, date) {
-    const offsets = {
-      'Asia/Shanghai': 8,
-      'Asia/Hong_Kong': 8,
-      'Asia/Seoul': 9,
-      'America/New_York': this.getUSOffset(date)
-    };
-
-    return offsets[timezone] || 0;
-  }
-
-  /**
-   * 获取美国时区偏移 (考虑夏令时)
-   */
-  getUSOffset(date) {
-    return this.isDST(date) ? -4 : -5;
-  }
-
-  /**
-   * 格式化日期
+   * 格式化日期 (用于判断节假日)
    */
   formatDate(date, market) {
     const marketConfig = this.config.getMarketConfig(market);
     const timezone = marketConfig.timezone || 'Asia/Shanghai';
-    const marketDate = this.toMarketTime(date, timezone);
-
-    const year = marketDate.getFullYear();
-    const month = String(marketDate.getMonth() + 1).padStart(2, '0');
-    const day = String(marketDate.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-  }
-
-  /**
-   * 格式化时间
-   */
-  formatTime(date) {
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
+    
+    const parts = this.getMarketTimeParts(date, timezone);
+    return `${parts.year}-${parts.month}-${parts.day}`;
   }
 }

@@ -69,8 +69,8 @@ flag = "🇰🇷"
 timezone = "Asia/Seoul"
 # 正常交易 + 盘后
 trading_hours = [
-  { start = "09:00", end = "15:30", type = "regular" },
-  { start = "15:30", end = "16:00", type = "after_hours" }
+  { start = "08:00", end = "14:30", type = "regular" },
+  { start = "14:30", end = "16:00", type = "after_hours" }
 ]
 # 数据源
 datasource = "https://m.stock.naver.com/api/stock/{code}/basic"

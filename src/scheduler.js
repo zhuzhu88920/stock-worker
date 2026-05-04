@@ -55,7 +55,6 @@ export class Scheduler {
    * 判断是否为周末
    */
   isWeekend(market, now = new Date()) {
-    const day = now.getDay();
     const marketConfig = this.config.getMarketConfig(market);
 
     // 获取市场时区
@@ -162,12 +161,15 @@ export class Scheduler {
    * 转换为市场时区
    */
   toMarketTime(date, timezone) {
-    // 简化处理，实际应该使用时区库
-    // 这里我们手动计算时区偏移
-
-    const offset = this.getTimezoneOffset(timezone, date);
+    // 获取 UTC 时间戳（去除本地时区的影响）
     const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
-    return new Date(utc + (offset * 60000));
+    
+    // 获取目标时区偏移 (小时)
+    const offset = this.getTimezoneOffset(timezone, date);
+    
+    // 【修复核心 BUG】：
+    // offset 是小时，必须乘以 3600000 (60分钟 * 60秒 * 1000毫秒) 才能转换为毫秒
+    return new Date(utc + (offset * 3600000));
   }
 
   /**

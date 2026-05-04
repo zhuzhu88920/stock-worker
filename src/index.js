@@ -137,7 +137,7 @@ function compareData(currentData, lastData) {
   });
 
   for (const current of currentData) {
-    const key = `${current.market}_${item.code}`;
+    const key = `${current.market}_${current.code}`;
     const last = lastMap.get(key);
 
     if (!last) {

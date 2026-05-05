@@ -34,12 +34,47 @@ export class TomlParser {
         continue;
       }
 
-      // 数组开始
+      // 数组开始（区分单行空数组 `key = []` 和多行数组 `key = [\n...\n]`）
       if (trimmed.includes('=') && trimmed.includes('[') && !trimmed.startsWith('[')) {
-        const match = trimmed.match(/^(\w+)\s*=\s*\[/);
-        if (match) {
+        // 单行完整数组：key = [...] 或 key = []
+        const singleLineMatch = trimmed.match(/^(\w+)\s*=\s*(\[.*\])\s*$/);
+        if (singleLineMatch) {
+          // 直接解析单行数组，不进入多行模式
+          const key = singleLineMatch[1];
+          const parsedValue = this.parseValue(singleLineMatch[2]);
+          if (currentSection === 'stocks' && currentSubsection) {
+            if (Array.isArray(parsedValue)) {
+              for (const item of parsedValue) {
+                if (typeof item === 'string') {
+                  const m = item.match(/([^,]+),(.+)/);
+                  if (m) config.stocks[currentSubsection].push({ code: m[1].trim(), name: m[2].trim() });
+                }
+              }
+            }
+          } else if (currentSection === 'stocks') {
+            if (Array.isArray(parsedValue)) {
+              for (const item of parsedValue) {
+                if (typeof item === 'string') {
+                  const m = item.match(/([^,]+),(.+)/);
+                  if (m) config.stocks[key].push({ code: m[1].trim(), name: m[2].trim() });
+                }
+              }
+            }
+          } else if (currentSection === 'markets' && currentSubsection) {
+            if (!config.markets[currentSubsection]) config.markets[currentSubsection] = {};
+            config.markets[currentSubsection][key] = parsedValue;
+          } else if (currentSection === 'holidays' && currentSubsection) {
+            if (!config.holidays[currentSubsection]) config.holidays[currentSubsection] = {};
+            config.holidays[currentSubsection][key] = parsedValue;
+          }
+          continue;
+        }
+
+        // 多行数组：key = [
+        const multiLineMatch = trimmed.match(/^(\w+)\s*=\s*\[\s*$/);
+        if (multiLineMatch) {
           inArray = true;
-          currentArrayKey = match[1];
+          currentArrayKey = multiLineMatch[1];
           arrayContent = [];
           continue;
         }

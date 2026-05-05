@@ -18,8 +18,8 @@ export class Pusher {
     }
 
     try {
-      // Bark API 格式: https://api.day.app/{key}/{title}/{body}
-      const url = `${this.barkUrl}/${encodeURIComponent(title)}/${encodeURIComponent(body)}`;
+      // Bark API 格式: https://api.day.app/{key}/{title}/{body}?group={group}
+      const url = `${this.barkUrl}/${encodeURIComponent(title)}/${encodeURIComponent(body)}?group=${encodeURIComponent(group)}`;
 
       console.log('Push URL:', url);
 
@@ -69,7 +69,7 @@ export class Pusher {
       return `${flag}${status}`;
     }).join('  ');
 
-    const title = `${marketStatus}   📅 ${dateStr}  ⏰ ${timeOnly}`;
+    const title = `${marketStatus}  ⏰ ${timeOnly}`;
 
     // 构建内容
     const body = stocks.map(stock => {

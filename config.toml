@@ -28,10 +28,7 @@ kr = [
 ]
 
 # 美股 (盘前: 21:30-22:30, 开盘: 22:30, 收盘: 05:00, 盘后: 05:00-08:00)
-us = [
-  "RKLB,Rocket Lab",
-  "TSLA,Tesla",
-]
+us = []
 
 # ============================================================
 # 市场配置
@@ -42,9 +39,9 @@ us = [
 name = "A股基金"
 flag = "🇨🇳"
 timezone = "Asia/Shanghai"
-# 净值更新时段
+# 净值更新时段（+1分钟确保收市价被抓到）
 trading_hours = [
-  { start = "19:00", end = "21:00" }
+  { start = "19:00", end = "21:01" }
 ]
 # 数据源
 datasource = "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex=1&pageSize=1&plat=Android&appType=ttjj&product=EFund&Version=1&Fcodes={code}&deviceid={timestamp}"
@@ -54,10 +51,10 @@ datasource = "https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo?pageIndex
 name = "港股"
 flag = "🇭🇰"
 timezone = "Asia/Hong_Kong"
-# 盘前竞价 + 正常交易
+# 盘前竞价 + 正常交易（+1分钟确保收市价被抓到）
 trading_hours = [
   { start = "09:00", end = "09:30", type = "pre_market" },
-  { start = "09:30", end = "16:00", type = "regular" }
+  { start = "09:30", end = "16:01", type = "regular" }
 ]
 # 数据源
 datasource = "https://qt.gtimg.cn/q=hk{code}"
@@ -67,10 +64,10 @@ datasource = "https://qt.gtimg.cn/q=hk{code}"
 name = "韩股"
 flag = "🇰🇷"
 timezone = "Asia/Seoul"
-# 正常交易 + 盘后
+# 正常交易 + 盘后（+1分钟确保收市价被抓到）
 trading_hours = [
   { start = "08:00", end = "14:30", type = "regular" },
-  { start = "14:30", end = "16:00", type = "after_hours" }
+  { start = "14:30", end = "16:01", type = "after_hours" }
 ]
 # 数据源
 datasource = "https://m.stock.naver.com/api/stock/{code}/basic"
@@ -84,14 +81,14 @@ timezone = "America/New_York"
 # 夏令时 (3月第二个周日 - 11月第一个周日)
 trading_hours_summer = [
   { start = "04:00", end = "09:30", type = "pre_market" },
-  { start = "09:30", end = "16:00", type = "regular" },
-  { start = "16:00", end = "20:00", type = "after_hours" }
+  { start = "09:30", end = "16:01", type = "regular" },
+  { start = "16:00", end = "20:01", type = "after_hours" }
 ]
 # 冬令时 (11月第一个周日 - 3月第二个周日)
 trading_hours_winter = [
   { start = "04:00", end = "09:30", type = "pre_market" },
-  { start = "09:30", end = "16:00", type = "regular" },
-  { start = "16:00", end = "20:00", type = "after_hours" }
+  { start = "09:30", end = "16:01", type = "regular" },
+  { start = "16:00", end = "20:01", type = "after_hours" }
 ]
 # 数据源 (Finnhub)
 datasource = "https://finnhub.io/api/v1/quote?symbol={code}&token={FINNHUB_API_KEY}"

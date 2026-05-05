@@ -24,8 +24,26 @@ export default {
       return await handleTrigger(env);
     }
 
-    // Cron 触发
-    return await handleTrigger(env);
+    // 本地开发用：写入KV配置
+    if (url.pathname === '/setup' && request.method === 'POST') {
+      const body = await request.json();
+      if (body.config) {
+        await env.CONFIG.put('config', body.config);
+      }
+      if (body.template) {
+        await env.CONFIG.put('template', body.template);
+      }
+      // 清空上次股价（用于强制首次触发推送）
+      if (body.reset_storage) {
+        await env.CONFIG.delete('all_data_latest');
+      }
+      return new Response(JSON.stringify({ status: 'ok', keys: Object.keys(body) }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 其他请求返回404
+    return new Response('Not Found', { status: 404 });
   },
 
   async scheduled(event, env, ctx) {
@@ -43,8 +61,8 @@ async function handleTrigger(env) {
     const config = new Config(env);
     await config.getConfig(); // 加载配置
     const scheduler = new Scheduler(config);
-    const fetcher = new Fetcher(config);
-    const storage = new Storage(env.STORAGE);
+    const fetcher = new Fetcher(config, env);
+    const storage = new Storage(env.CONFIG);
     const pusher = new Pusher(env.BARK_URL);
 
     // 加载模板配置
@@ -79,17 +97,40 @@ async function handleTrigger(env) {
 
     console.log(`[${timeStr}] 开市市场: ${openMarkets.join(', ')}`);
 
-    // 获取开市市场的股票列表
-    const stocks = config.getStocksByMarkets(openMarkets);
+    // 获取所有已配置的股票（用于推送内容）
+    const allStocks = config.getAllStocks();
 
-    // 抓取数据
-    const currentData = await fetcher.fetchAll(stocks, now);
+    // 获取需要抓取的股票（仅开市市场）
+    const fetchStocks = config.getStocksByMarkets(openMarkets);
 
-    // 获取上次数据
-    const lastData = await storage.getLastData(stocks);
+    // 如果开市市场没有有效股票，不推送
+    if (!fetchStocks || fetchStocks.length === 0) {
+      console.log(`[${timeStr}] 开市市场无有效股票，不推送`);
+      return new Response(JSON.stringify({ status: 'no_valid_stocks' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-    // 对比数据
-    const hasChanges = compareData(currentData, lastData);
+    // 抓取数据（仅开市市场）
+    const currentData = await fetcher.fetchAll(fetchStocks, now);
+
+    // 如果抓取结果为空，不推送
+    if (!currentData || currentData.length === 0) {
+      console.log(`[${timeStr}] 抓取数据为空，不推送`);
+      return new Response(JSON.stringify({ status: 'no_data_fetched' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 获取所有股票的历史数据（用于对比 + 推送内容）
+    const lastDataAll = await storage.getLastData(allStocks);
+
+    console.log(`[${timeStr}] Current data:`, JSON.stringify(currentData));
+    console.log(`[${timeStr}] Last data (all):`, JSON.stringify(lastDataAll));
+
+    // 仅对比本次抓取的数据是否有变化
+    const hasChanges = compareData(currentData, lastDataAll);
+    console.log(`[${timeStr}] Has changes:`, hasChanges);
 
     // 如果没有变化，不推送
     if (!hasChanges) {
@@ -99,18 +140,34 @@ async function handleTrigger(env) {
       });
     }
 
-    // 保存当前数据
-    await storage.saveData(currentData);
+    // 合并数据：用本次抓取的数据覆盖，其余保留历史数据
+    const allDataToSave = mergeData(currentData, lastDataAll, allStocks);
 
-    // 构建推送内容
-    const pushData = buildPushData(openMarkets, currentData, lastData, timeStr, config, templateParser);
+    // 保存合并后的数据
+    await storage.saveData(allDataToSave);
 
-    // 推送
-    await pusher.push(pushData);
+    // 构建推送内容（包含所有股票）
+    const pushData = buildPushData(openMarkets, allDataToSave, lastDataAll, timeStr, config, templateParser);
 
-    console.log(`[${timeStr}] 推送成功`);
+    // 推送（失败不影响主流程）
+    let pushResult = 'skipped';
+    try {
+      await pusher.push(pushData);
+      pushResult = 'ok';
+    } catch (pushErr) {
+      pushResult = pushErr.message;
+      console.warn(`[${timeStr}] 推送失败:`, pushErr.message);
+    }
 
-    return new Response(JSON.stringify({ status: 'success', markets: openMarkets }), {
+    console.log(`[${timeStr}] 推送结果: ${pushResult}`);
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      markets: openMarkets,
+      push: pushResult,
+      title: pushData.title,
+      body: pushData.body
+    }), {
       headers: { 'Content-Type': 'application/json' }
     });
 
@@ -124,9 +181,44 @@ async function handleTrigger(env) {
 }
 
 /**
+ * 合并数据：用本次抓取数据覆盖，其余保留历史数据
+ */
+function mergeData(currentData, lastData, allStocks) {
+  const map = new Map();
+  // 先放入所有历史数据
+  for (const item of lastData) {
+    map.set(`${item.market}_${item.code}`, item);
+  }
+  // 用本次抓取数据覆盖
+  for (const item of currentData) {
+    map.set(`${item.market}_${item.code}`, item);
+  }
+  // 确保所有已配置股票都在结果中（无数据的留空）
+  for (const s of allStocks) {
+    const key = `${s.market}_${s.code}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        code: s.code,
+        name: s.name,
+        market: s.market,
+        price: null,
+        change_amount: null,
+        change_percent: null,
+        nav_date: null,
+        updated_at: new Date().toISOString()
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
  * 对比数据是否有变化
  */
 function compareData(currentData, lastData) {
+  if (!currentData || currentData.length === 0) {
+    return false; // 当前没有数据，视为无变化
+  }
   if (!lastData || lastData.length === 0) {
     return true; // 第一次抓取，视为有变化
   }
@@ -157,9 +249,9 @@ function compareData(currentData, lastData) {
 }
 
 /**
- * 构建推送数据
+ * 构建推送数据（包含所有已配置股票）
  */
-function buildPushData(openMarkets, currentData, lastData, timeStr, config, templateParser) {
+function buildPushData(openMarkets, allData, lastData, timeStr, config, templateParser) {
   const now = new Date();
   const dateStr = now.toLocaleString('zh-CN', {
     timeZone: 'Asia/Shanghai',
@@ -195,14 +287,19 @@ function buildPushData(openMarkets, currentData, lastData, timeStr, config, temp
     title = `${marketStatus}   📅 ${dateStr}  ⏰ ${timeOnly}`;
   }
 
-  // 构建内容
-  const content = currentData.map(item => {
+  // 构建内容：遍历所有已配置股票
+  const lastMap = new Map();
+  (lastData || []).forEach(item => {
+    lastMap.set(`${item.market}_${item.code}`, item);
+  });
+
+  // allData 已包含所有股票（本次抓取的 + 历史保留的）
+  const content = (allData || []).map(item => {
     const marketConfig = config.getMarketConfig(item.market);
 
     // 简化基金名称
     let name = item.name;
     if (item.market === 'cn_fund') {
-      // 去掉括号内容
       name = name.replace(/\([^)]*\)/g, '').trim();
     }
 
@@ -247,5 +344,5 @@ function buildPushData(openMarkets, currentData, lastData, timeStr, config, temp
     }
   }).join('\n');
 
-  return { title, content };
+  return { title, body: content };
 }

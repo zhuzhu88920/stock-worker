@@ -5,25 +5,20 @@ compatibility_date = "2024-01-01"
 # Cloudflare 账户 ID
 account_id = "7eeac3798da0cafbdd84901d4d9fab18"
 
-# KV 命名空间 (用于存储配置)
+# KV 命名空间（配置 + 数据存储共用）
 [[kv_namespaces]]
 binding = "CONFIG"
-id = "4010908b8c564128a7f3bba963f99790"
-
-# KV 命名空间 (用于存储数据)
-[[kv_namespaces]]
-binding = "STORAGE"
 id = "4010908b8c564128a7f3bba963f99790"
 
 # 环境变量
 [vars]
 # Bark 推送配置
 # 格式: https://api.day.app/your-bark-key
-BARK_URL = "https://api.day.app/your-bark-key"
+BARK_URL = "https://api.day.app/YwSqmvunLvMV8a3Nn4gS7c"
 
 # Finnhub API Key (美股数据源)
-FINNHUB_API_KEY = "your-finnhub-api-key"
+FINNHUB_API_KEY = ""
 
 # Cron 触发器（每5分钟）
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["1/5 * * * *"]

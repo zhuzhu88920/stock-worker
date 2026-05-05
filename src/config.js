@@ -38,6 +38,22 @@ export class Config {
   }
 
   /**
+   * 获取所有已配置的股票（用于推送内容）
+   */
+  getAllStocks() {
+    const all = [];
+    const markets = this.getAllMarkets();
+    for (const market of markets) {
+      const marketStocks = this.config.stocks[market] || [];
+      for (const stock of marketStocks) {
+        if (!stock.code || !stock.code.trim()) continue;
+        all.push({ ...stock, market });
+      }
+    }
+    return all;
+  }
+
+  /**
    * 根据市场获取股票列表
    */
   getStocksByMarkets(markets) {
@@ -45,10 +61,8 @@ export class Config {
     for (const market of markets) {
       const marketStocks = this.config.stocks[market] || [];
       for (const stock of marketStocks) {
-        stocks.push({
-          ...stock,
-          market
-        });
+        if (!stock.code || !stock.code.trim()) continue;
+        stocks.push({ ...stock, market });
       }
     }
     return stocks;

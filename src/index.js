@@ -257,8 +257,8 @@ function buildPushData(openMarkets, allData, lastData, timeStr, config, template
     minute: '2-digit'
   });
 
-  // 构建标题 - 显示所有市场状态
-  const allMarkets = ['cn_fund', 'hk', 'kr', 'us'];
+  // 构建标题 - 显示所有市场状态（顺序：港股 → 韩股 → A股基金 → 美股）
+  const allMarkets = ['hk', 'kr', 'cn_fund', 'us'];
   const marketStatus = allMarkets.map(market => {
     const marketConfig = config.getMarketConfig(market);
     const isOpen = openMarkets.includes(market);
@@ -278,14 +278,32 @@ function buildPushData(openMarkets, allData, lastData, timeStr, config, template
     title = `${marketStatus}   📅 ${dateStr}  ⏰ ${timeOnly}`;
   }
 
-  // 构建内容：遍历所有已配置股票
+  // 按固定市场顺序排列：港股 → 韩股 → A股基金 → 美股
+  const marketOrder = ['hk', 'kr', 'cn_fund', 'us'];
+  const dataMap = new Map();
+  (allData || []).forEach(item => {
+    dataMap.set(`${item.market}_${item.code}`, item);
+  });
+
+  // 按市场顺序遍历所有已配置股票
+  const allStocks = config.getAllStocks();
+  const sortedData = [];
+  for (const market of marketOrder) {
+    for (const stock of allStocks) {
+      if (stock.market === market) {
+        const item = dataMap.get(`${stock.market}_${stock.code}`);
+        if (item) sortedData.push(item);
+      }
+    }
+  }
+
+  // 构建内容：按排序后的顺序遍历
   const lastMap = new Map();
   (lastData || []).forEach(item => {
     lastMap.set(`${item.market}_${item.code}`, item);
   });
 
-  // allData 已包含所有股票（本次抓取的 + 历史保留的）
-  const content = (allData || []).map(item => {
+  const content = sortedData.map(item => {
     const marketConfig = config.getMarketConfig(item.market);
 
     // 简化基金名称

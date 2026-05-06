@@ -22,7 +22,7 @@ hk = [
   "07709,2x海力士",
 ]
 
-# 韩股 (开盘: 08:00, 收盘: 14:30, 盘后: 14:30-16:00)
+# 韩股 (开盘: 09:00首尔/08:00北京, 收盘: 15:30首尔/14:30北京)
 kr = [
   "000660,海力士",
 ]
@@ -64,10 +64,10 @@ datasource = "https://qt.gtimg.cn/q=hk{code}"
 name = "韩股"
 flag = "🇰🇷"
 timezone = "Asia/Seoul"
-# 正常交易 + 盘后（+1分钟确保收市价被抓到）
+# 正常交易 09:00-15:30 + 盘后（首尔时间，+1分钟确保收市价被抓到）
 trading_hours = [
-  { start = "08:00", end = "14:30", type = "regular" },
-  { start = "14:30", end = "16:01", type = "after_hours" }
+  { start = "09:00", end = "15:30", type = "regular" },
+  { start = "15:30", end = "16:01", type = "after_hours" }
 ]
 # 数据源
 datasource = "https://m.stock.naver.com/api/stock/{code}/basic"

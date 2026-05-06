@@ -131,20 +131,28 @@ export class Scheduler {
 
   /**
    * 判断是否为夏令时 (美国)
+   * 使用美东时间判断，避免 UTC 与美东时间切换日偏差
    */
   isDST(date = new Date()) {
-    const year = date.getFullYear();
-    const month = date.getMonth(); // 0-11
+    const parts = this.getMarketTimeParts(date, 'America/New_York');
+    const month = parseInt(parts.month, 10) - 1; // 0-11
+    const day = parseInt(parts.day, 10);
+    const hour = parseInt(parts.hour, 10);
+    const year = parseInt(parts.year, 10);
 
     if (month < 2 || month > 10) return false;
     if (month > 2 && month < 10) return true;
 
-    if (month === 2) { // 3月第二个周日
+    if (month === 2) { // 3月: 第二个周日 02:00 开始
       const secondSunday = this.getNthDayOfMonth(year, 2, 0, 2);
-      return date.getDate() >= secondSunday;
-    } else if (month === 10) { // 11月第一个周日
+      if (day > secondSunday) return true;
+      if (day < secondSunday) return false;
+      return hour >= 2; // 当天 02:00 后才生效
+    } else if (month === 10) { // 11月: 第一个周日 02:00 结束
       const firstSunday = this.getNthDayOfMonth(year, 10, 0, 1);
-      return date.getDate() < firstSunday;
+      if (day < firstSunday) return true;
+      if (day > firstSunday) return false;
+      return hour < 2; // 当天 02:00 前仍生效
     }
     return false;
   }

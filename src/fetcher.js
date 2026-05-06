@@ -123,6 +123,13 @@ export class Fetcher {
       'Origin': 'https://quote.eastmoney.com'
     };
 
+    // A股基金：东财API拒绝桌面UA，必须用移动端UA
+    if (market === 'cn_fund') {
+      headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 12; SM-G9910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+      delete headers['Referer'];
+      delete headers['Origin'];
+    }
+
     // 韩股需要 Referer
     if (market === 'kr') {
       headers['Referer'] = 'https://m.stock.naver.com/';

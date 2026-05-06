@@ -9,7 +9,7 @@
 #   {date} - 日期 (如: 2026/05/03)
 #   {time} - 时间 (如: 18:49)
 [title]
-template = "{market_status}   📅 {date}  ⏰ {time}"
+template = "{market_status} ⏰ {time}"
 
 # 内容模板
 # 可用占位符:

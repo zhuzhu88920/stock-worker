@@ -84,10 +84,10 @@ async function handleTrigger(env) {
       minute: '2-digit'
     });
 
-    // 检查哪些市场开市
+    // 检查哪些市场开市（仅用于推送标题状态显示）
     const openMarkets = scheduler.getOpenMarkets(now);
 
-    // 如果没有市场开市，不推送
+    // 如果没有任何市场开市，不抓取、不更新KV、不推送
     if (openMarkets.length === 0) {
       console.log(`[${timeStr}] 所有市场休市，不推送`);
       return new Response(JSON.stringify({ status: 'no_market_open' }), {
@@ -97,30 +97,14 @@ async function handleTrigger(env) {
 
     console.log(`[${timeStr}] 开市市场: ${openMarkets.join(', ')}`);
 
-    // 获取所有已配置的股票（用于推送内容）
+    // 仅获取开市市场的股票（未开市市场保留KV旧数据，不抓取）
+    const openMarketStocks = config.getStocksByMarkets(openMarkets);
+
+    // 抓取开市市场的数据
+    const currentData = await fetcher.fetchAll(openMarketStocks, now);
+
+    // 获取所有已配置的股票（用于合并、推送）
     const allStocks = config.getAllStocks();
-
-    // 获取需要抓取的股票（仅开市市场）
-    const fetchStocks = config.getStocksByMarkets(openMarkets);
-
-    // 如果开市市场没有有效股票，不推送
-    if (!fetchStocks || fetchStocks.length === 0) {
-      console.log(`[${timeStr}] 开市市场无有效股票，不推送`);
-      return new Response(JSON.stringify({ status: 'no_valid_stocks' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // 抓取数据（仅开市市场）
-    const currentData = await fetcher.fetchAll(fetchStocks, now);
-
-    // 如果抓取结果为空，不推送
-    if (!currentData || currentData.length === 0) {
-      console.log(`[${timeStr}] 抓取数据为空，不推送`);
-      return new Response(JSON.stringify({ status: 'no_data_fetched' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
 
     // 获取所有股票的历史数据（用于对比 + 推送内容）
     const lastDataAll = await storage.getLastData(allStocks);
@@ -140,7 +124,7 @@ async function handleTrigger(env) {
       });
     }
 
-    // 合并数据：用本次抓取的数据覆盖，其余保留历史数据
+    // 合并数据：用本次抓取的开市数据覆盖，其余保留历史数据
     const allDataToSave = mergeData(currentData, lastDataAll, allStocks);
 
     // 保存合并后的数据
@@ -189,9 +173,11 @@ function mergeData(currentData, lastData, allStocks) {
   for (const item of lastData) {
     map.set(`${item.market}_${item.code}`, item);
   }
-  // 用本次抓取数据覆盖
+  // 用本次抓取数据覆盖（仅覆盖抓取成功的数据，避免null覆盖有效值）
   for (const item of currentData) {
-    map.set(`${item.market}_${item.code}`, item);
+    if (item.price !== null && item.price !== undefined) {
+      map.set(`${item.market}_${item.code}`, item);
+    }
   }
   // 确保所有已配置股票都在结果中（无数据的留空）
   for (const s of allStocks) {
@@ -229,6 +215,11 @@ function compareData(currentData, lastData) {
   });
 
   for (const current of currentData) {
+    // 跳过抓取失败的数据（price为null），避免误触发推送
+    if (current.price === null || current.price === undefined) {
+      continue;
+    }
+
     const key = `${current.market}_${current.code}`;
     const last = lastMap.get(key);
 
@@ -361,12 +352,12 @@ function buildPushData(openMarkets, allData, lastData, timeStr, config, template
  */
 function formatKrPrice(value) {
   if (!value && value !== 0) return '';
-  const num = parseFloat(value);
+  // 去掉逗号再解析（韩股价格可能带千分位如 "1,585,000.00"）
+  const num = parseFloat(String(value).replace(/,/g, ''));
   if (isNaN(num) || num === 0) return '0';
   if (Math.abs(num) >= 1000) {
     const kVal = num / 1000;
-    // 保留整数，加千分位
     return Math.round(kVal).toLocaleString('en-US') + 'K';
   }
-  return value;
+  return String(value).replace(/,/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }

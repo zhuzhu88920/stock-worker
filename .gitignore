@@ -4,9 +4,11 @@ node_modules/
 # Environment variables
 .env
 .env.local
+.dev.vars
 
 # Wrangler
 .wrangler/
+.wrangler-state/
 wrangler.toml.local
 
 # Logs
@@ -27,3 +29,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+NDH6SA~M
+
+# WorkBuddy
+.workbuddy/

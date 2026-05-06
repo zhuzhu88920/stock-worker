@@ -13,10 +13,6 @@ id = "4010908b8c564128a7f3bba963f99790"
 
 # 环境变量
 [vars]
-# Bark 推送配置
-# 格式: https://api.day.app/your-bark-key
-BARK_URL = "https://api.day.app/YwSqmvunLvMV8a3Nn4gS7c"
-
 # Finnhub API Key (美股数据源)
 FINNHUB_API_KEY = ""
 

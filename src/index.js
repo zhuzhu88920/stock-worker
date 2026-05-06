@@ -321,14 +321,22 @@ function buildPushData(openMarkets, allData, lastData, timeStr, config, template
       }
     }
 
+    // 韩股价格格式化：去掉后面3个0，用 K 表示（如 1,574,000.00 → 1,574K）
+    let price = item.price;
+    let changeAmount = item.change_amount || '';
+    if (item.market === 'kr') {
+      price = formatKrPrice(price);
+      changeAmount = formatKrPrice(changeAmount);
+    }
+
     // 使用模板渲染内容
     if (templateParser && templateParser.getTemplates().content[item.market]) {
       return templateParser.renderContent(item.market, {
         flag: marketConfig.flag,
         name: name,
         code: item.code,
-        price: item.price,
-        change_amount: item.change_amount || '',
+        price: price,
+        change_amount: changeAmount,
         change_percent: item.change_percent,
         trend: trend,
         nav_date: item.nav_date || '',
@@ -337,12 +345,28 @@ function buildPushData(openMarkets, allData, lastData, timeStr, config, template
     } else {
       // 默认格式
       if (item.market === 'cn_fund') {
-        return `${marketConfig.flag} ${name} 💰${item.price} ${trend}${item.change_percent} | ${item.nav_date}`;
+        return `${marketConfig.flag} ${name} 💰${price} ${trend}${item.change_percent} | ${item.nav_date}`;
       } else {
-        return `${marketConfig.flag} ${name} 💰${item.price} ${trend}${item.change_amount}(${item.change_percent})`;
+        return `${marketConfig.flag} ${name} 💰${price} ${trend}${changeAmount}(${item.change_percent})`;
       }
     }
   }).join('\n');
 
   return { title, body: content };
+}
+
+/**
+ * 韩股价格格式化：去掉后面3个0，用 K 表示
+ * 如 1,574,000.00 → 1,574K，0.00 → 0
+ */
+function formatKrPrice(value) {
+  if (!value && value !== 0) return '';
+  const num = parseFloat(value);
+  if (isNaN(num) || num === 0) return '0';
+  if (Math.abs(num) >= 1000) {
+    const kVal = num / 1000;
+    // 保留整数，加千分位
+    return Math.round(kVal).toLocaleString('en-US') + 'K';
+  }
+  return value;
 }

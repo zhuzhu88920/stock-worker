@@ -180,7 +180,7 @@ cn_fund = [
 ]
 hk = ["07709,2x海力士"]
 kr = ["000660,海力士"]
-us = ["MU,Micron", "DRAM,Roundhill Memory ETF", "GLW,Corning"]
+us = ["MU,美光", "DRAM,存储ETF", "GLW,康宁"]
 
 # 市场配置（不含交易时段，由 API 提供）
 [markets.cn_fund]
@@ -269,7 +269,7 @@ cn_fund = "{flag} {name} 💰{price} {trend} {change_percent} 📅 {nav_date_sho
 | 市场 | 数据源 | 说明 |
 |------|--------|------|
 | A股基金 | 东方财富 | 基金净值数据（需移动端UA） |
-| 港股 | 腾讯行情 | 实时股价 |
+| 港股 | 东方财富 | 实时股价（push2 API） |
 | 韩股 | Naver Finance | 实时股价 |
 | 美股 | Yahoo Finance | 实时股价 |
 | 交易日历 | trading-calendar-api.z8j.cc.cd | 各市场交易时段和休假日 |

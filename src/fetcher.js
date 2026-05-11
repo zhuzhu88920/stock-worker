@@ -56,13 +56,9 @@ export class Fetcher {
     }
 
     // 基金数据是JSON格式，需要特殊处理
-    // 港股数据是腾讯格式，需要特殊处理
     let data;
     if (stock.market === 'cn_fund') {
       data = await response.json();
-    } else if (stock.market === 'hk') {
-      const text = await response.text();
-      data = this.parseTencentHK(text);
     } else {
       data = await response.json();
     }
@@ -71,31 +67,6 @@ export class Fetcher {
 
     // 解析数据
     return this.parseData(data, stock, marketConfig);
-  }
-
-  /**
-   * 解析腾讯港股格式
-   */
-  parseTencentHK(text) {
-    // 格式: v_hk07709="100~名称~07709~价格~昨收~开盘~..."
-    const match = text.match(/v_hk\d+="(.+)"/);
-    if (!match) {
-      return null;
-    }
-
-    const parts = match[1].split('~');
-    return {
-      name: parts[1],
-      code: parts[2],
-      price: parseFloat(parts[3]),      // 当前价格
-      prev_close: parseFloat(parts[4]), // 昨收价格
-      open: parseFloat(parts[5]),       // 开盘价
-      high: parseFloat(parts[9]),       // 最高价
-      low: parseFloat(parts[19]),       // 最低价
-      volume: parseFloat(parts[6]),     // 成交量
-      change_amount: parseFloat(parts[31]), // 涨跌额
-      change_percent: parseFloat(parts[32])  // 涨跌幅
-    };
   }
 
   /**
@@ -201,14 +172,16 @@ export class Fetcher {
   }
 
   /**
-   * 解析港股数据
+   * 解析港股数据 (东方财富)
    */
   parseHK(data, result) {
     try {
-      if (data) {
-        result.price = this.formatPrice(data.price);
-        result.change_amount = this.formatPrice(data.change_amount);
-        result.change_percent = this.formatPercent(data.change_percent);
+      if (data && data.data) {
+        const d = data.data;
+        // 东方财富港股格式：f43价格/1000，f169涨跌额/1000，f170涨跌幅/100
+        result.price = this.formatPrice(d.f43 / 1000);
+        result.change_amount = this.formatPrice(d.f169 / 1000);
+        result.change_percent = this.formatPercent(d.f170 / 100);
       }
     } catch (error) {
       console.error('Error parsing HK stock data:', error);

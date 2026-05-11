@@ -117,23 +117,24 @@ export class Fetcher {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'application/json, text/plain, */*',
       'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-      'Accept-Encoding': 'gzip, deflate',
+      'Accept-Encoding': 'gzip, deflate, br',
       'Connection': 'keep-alive',
-      'Referer': 'https://quote.eastmoney.com/',
-      'Origin': 'https://quote.eastmoney.com'
     };
 
     // A股基金：东财API拒绝桌面UA，必须用移动端UA
     if (market === 'cn_fund') {
       headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 12; SM-G9910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-      delete headers['Referer'];
-      delete headers['Origin'];
     }
 
     // 韩股需要 Referer
     if (market === 'kr') {
       headers['Referer'] = 'https://m.stock.naver.com/';
       headers['Origin'] = 'https://m.stock.naver.com';
+    }
+
+    // 美股 Yahoo Finance 需要 Referer
+    if (market === 'us') {
+      headers['Referer'] = 'https://finance.yahoo.com/';
     }
 
     return headers;
@@ -235,15 +236,21 @@ export class Fetcher {
   }
 
   /**
-   * 解析美股数据 (Finnhub)
+   * 解析美股数据 (Yahoo Finance)
    */
   parseUS(data, result) {
     try {
-      const stockData = data;
-      if (stockData) {
-        result.price = this.formatPrice(stockData.c); // current price
-        result.change_amount = this.formatPrice(stockData.d); // change
-        result.change_percent = this.formatPercent(stockData.dp); // percent change
+      const chartResult = data?.chart?.result?.[0];
+      if (chartResult) {
+        const meta = chartResult.meta;
+        const currentPrice = meta.regularMarketPrice;
+        const previousClose = meta.previousClose;
+        const change = currentPrice - previousClose;
+        const changePercent = previousClose ? (change / previousClose) * 100 : 0;
+
+        result.price = this.formatPrice(currentPrice);
+        result.change_amount = this.formatPrice(change);
+        result.change_percent = this.formatPercent(changePercent);
       }
     } catch (error) {
       console.error('Error parsing US stock data:', error);

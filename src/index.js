@@ -84,30 +84,42 @@ async function handleTrigger(env) {
       minute: '2-digit'
     });
 
-    // 检查哪些市场开市（仅用于推送标题状态显示）
-    const openMarkets = scheduler.getOpenMarkets(now);
+    // 从环境变量读取缓冲期配置
+    const bufferMin = parseInt(env.MARKET_CLOSE_BUFFER || '5', 10);
 
-    // 如果没有任何市场开市，不抓取、不更新KV、不推送
-    if (openMarkets.length === 0) {
+    // 检查哪些市场开市（含缓冲期，用于推送标题状态显示）
+    const openMarkets = await scheduler.getOpenMarkets(now, bufferMin);
+
+    // 获取所有已配置的股票
+    const allStocks = config.getAllStocks();
+
+    // 获取所有股票的历史数据（用于对比 + 推送内容 + 检查null）
+    const lastDataAll = await storage.getLastData(allStocks);
+
+    // 找出KV中price为null的市场（需要强制抓取补数据，即使休市）
+    const nullMarkets = getNullDataMarkets(lastDataAll, allStocks);
+    if (nullMarkets.length > 0) {
+      console.log(`[${timeStr}] KV中数据缺失的市场: ${nullMarkets.join(', ')}，强制抓取`);
+    }
+
+    // 合并开市市场 + 缺数据市场（去重）
+    const fetchMarkets = [...new Set([...openMarkets, ...nullMarkets])];
+
+    // 如果没有任何市场需要抓取，且没有开市市场，不推送
+    if (fetchMarkets.length === 0) {
       console.log(`[${timeStr}] 所有市场休市，不推送`);
       return new Response(JSON.stringify({ status: 'no_market_open' }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    console.log(`[${timeStr}] 开市市场: ${openMarkets.join(', ')}`);
+    console.log(`[${timeStr}] 开市市场: ${openMarkets.join(', ')}, 抓取市场: ${fetchMarkets.join(', ')}`);
 
-    // 仅获取开市市场的股票（未开市市场保留KV旧数据，不抓取）
-    const openMarketStocks = config.getStocksByMarkets(openMarkets);
+    // 获取需要抓取的市场的股票
+    const fetchStocks = config.getStocksByMarkets(fetchMarkets);
 
-    // 抓取开市市场的数据
-    const currentData = await fetcher.fetchAll(openMarketStocks, now);
-
-    // 获取所有已配置的股票（用于合并、推送）
-    const allStocks = config.getAllStocks();
-
-    // 获取所有股票的历史数据（用于对比 + 推送内容）
-    const lastDataAll = await storage.getLastData(allStocks);
+    // 抓取数据
+    const currentData = await fetcher.fetchAll(fetchStocks, now);
 
     console.log(`[${timeStr}] Current data:`, JSON.stringify(currentData));
     console.log(`[${timeStr}] Last data (all):`, JSON.stringify(lastDataAll));
@@ -132,6 +144,14 @@ async function handleTrigger(env) {
 
     // 构建推送内容（包含所有股票）
     const pushData = buildPushData(openMarkets, allDataToSave, lastDataAll, timeStr, config, templateParser);
+
+    // 如果推送内容为空，不推送（避免发送空消息）
+    if (!pushData.body || pushData.body.trim() === '') {
+      console.log(`[${timeStr}] 推送内容为空，跳过推送`);
+      return new Response(JSON.stringify({ status: 'no_content' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     // 推送（失败不影响主流程）
     let pushResult = 'skipped';
@@ -162,6 +182,27 @@ async function handleTrigger(env) {
       headers: { 'Content-Type': 'application/json' }
     });
   }
+}
+
+/**
+ * 找出KV中price为null的市场（需要强制抓取补数据）
+ */
+function getNullDataMarkets(lastData, allStocks) {
+  const lastMap = new Map();
+  (lastData || []).forEach(item => {
+    lastMap.set(`${item.market}_${item.code}`, item);
+  });
+
+  const nullMarkets = new Set();
+  for (const stock of allStocks) {
+    const key = `${stock.market}_${stock.code}`;
+    const item = lastMap.get(key);
+    // KV中无数据，或price为null → 该市场需要补数据
+    if (!item || item.price === null || item.price === undefined) {
+      nullMarkets.add(stock.market);
+    }
+  }
+  return Array.from(nullMarkets);
 }
 
 /**

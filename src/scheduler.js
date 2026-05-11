@@ -1,7 +1,10 @@
 /**
  * 调度器模块
- * 判断交易时段和休假日
+ * 调用 trading-calendar-api 判断市场状态
+ * 本地仅保留 getOpenMarkets 作为调用入口
  */
+
+import { isMarketOpenWithBuffer, getAllMarketStatusText } from './calendar-api.js';
 
 export class Scheduler {
   constructor(config) {
@@ -9,14 +12,16 @@ export class Scheduler {
   }
 
   /**
-   * 获取当前开市的市场
+   * 获取当前开市的市场（含缓冲期）
+   * @param {Date} now
+   * @param {number} bufferMin - 收盘后缓冲分钟数
    */
-  getOpenMarkets(now = new Date()) {
+  async getOpenMarkets(now = new Date(), bufferMin = 5) {
     const markets = this.config.getAllMarkets();
     const openMarkets = [];
 
     for (const market of markets) {
-      if (this.isMarketOpen(market, now)) {
+      if (await this.isMarketOpen(market, now, bufferMin)) {
         openMarkets.push(market);
       }
     }
@@ -25,162 +30,18 @@ export class Scheduler {
   }
 
   /**
-   * 判断市场是否开市
+   * 判断市场是否开市（含缓冲期）
+   * 调用 calendar-api 模块
    */
-  isMarketOpen(market, now = new Date()) {
-    if (this.isHoliday(market, now)) return false;
-    if (this.isWeekend(market, now)) return false;
-    return this.isInTradingHours(market, now);
+  async isMarketOpen(market, now = new Date(), bufferMin = 5) {
+    return await isMarketOpenWithBuffer(market, now, bufferMin);
   }
 
   /**
-   * 判断是否为休假日
+   * 获取所有市场的状态文本（用于推送标题）
+   * @returns {Promise<object>} { cn_fund, hk, us, kr }
    */
-  isHoliday(market, now = new Date()) {
-    const holidays = this.config.getHolidays(market);
-    const dateStr = this.formatDate(now, market);
-    return holidays.includes(dateStr);
-  }
-
-  /**
-   * 核心方法：使用 Intl.DateTimeFormat 获取目标时区的精准时间字符串
-   * 彻底避免 new Date() 的毫秒运算产生的环境兼容性 Bug
-   */
-  getMarketTimeParts(date, timezone) {
-    const options = {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      weekday: 'short'
-    };
-    
-    // 生成类似: "10/24/2023, 14:30" (基于 en-US 格式保证稳定解析)
-    const formatter = new Intl.DateTimeFormat('en-US', options);
-    const parts = formatter.formatToParts(date);
-    
-    const getPart = (type) => {
-      const part = parts.find(p => p.type === type);
-      return part ? part.value : '';
-    };
-
-    // 特殊处理 24:00 的情况（部分环境 en-US 会将 00:00 格式化为 24:00）
-    let hour = parseInt(getPart('hour'), 10);
-    if (hour === 24) hour = 0;
-
-    return {
-      year: getPart('year'),
-      month: getPart('month'),
-      day: getPart('day'),
-      hour: String(hour).padStart(2, '0'),
-      minute: getPart('minute'),
-      weekday: getPart('weekday') // 返回 Sun, Mon, Tue 等
-    };
-  }
-
-  /**
-   * 判断是否为周末
-   */
-  isWeekend(market, now = new Date()) {
-    const marketConfig = this.config.getMarketConfig(market);
-    const timezone = marketConfig.timezone || 'Asia/Shanghai';
-    
-    // 获取市场时区的具体时间信息
-    const parts = this.getMarketTimeParts(now, timezone);
-    return parts.weekday === 'Sun' || parts.weekday === 'Sat';
-  }
-
-  /**
-   * 判断是否在交易时段内
-   */
-  isInTradingHours(market, now = new Date()) {
-    const marketConfig = this.config.getMarketConfig(market);
-    const timezone = marketConfig.timezone || 'Asia/Shanghai';
-
-    // 直接获取市场时区的 小时:分钟
-    const parts = this.getMarketTimeParts(now, timezone);
-    const currentTime = `${parts.hour}:${parts.minute}`;
-
-    let tradingHours = marketConfig.trading_hours;
-
-    // 美股需要判断夏令时/冬令时
-    if (market === 'us') {
-      if (this.isDST(now)) {
-        tradingHours = marketConfig.trading_hours_summer;
-      } else {
-        tradingHours = marketConfig.trading_hours_winter;
-      }
-    }
-
-    if (!tradingHours || tradingHours.length === 0) {
-      return false;
-    }
-
-    // 检查是否在任一时段内
-    for (const period of tradingHours) {
-      if (currentTime >= period.start && currentTime < period.end) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * 判断是否为夏令时 (美国)
-   * 使用美东时间判断，避免 UTC 与美东时间切换日偏差
-   */
-  isDST(date = new Date()) {
-    const parts = this.getMarketTimeParts(date, 'America/New_York');
-    const month = parseInt(parts.month, 10) - 1; // 0-11
-    const day = parseInt(parts.day, 10);
-    const hour = parseInt(parts.hour, 10);
-    const year = parseInt(parts.year, 10);
-
-    if (month < 2 || month > 10) return false;
-    if (month > 2 && month < 10) return true;
-
-    if (month === 2) { // 3月: 第二个周日 02:00 开始
-      const secondSunday = this.getNthDayOfMonth(year, 2, 0, 2);
-      if (day > secondSunday) return true;
-      if (day < secondSunday) return false;
-      return hour >= 2; // 当天 02:00 后才生效
-    } else if (month === 10) { // 11月: 第一个周日 02:00 结束
-      const firstSunday = this.getNthDayOfMonth(year, 10, 0, 1);
-      if (day < firstSunday) return true;
-      if (day > firstSunday) return false;
-      return hour < 2; // 当天 02:00 前仍生效
-    }
-    return false;
-  }
-
-  /**
-   * 获取某月第N个星期X
-   */
-  getNthDayOfMonth(year, month, dayOfWeek, n) {
-    const date = new Date(year, month, 1);
-    let count = 0;
-    while (date.getMonth() === month) {
-      if (date.getDay() === dayOfWeek) {
-        count++;
-        if (count === n) return date.getDate();
-      }
-      date.setDate(date.getDate() + 1);
-    }
-    return -1;
-  }
-
-  /**
-   * 格式化日期 (用于判断节假日)
-   */
-  formatDate(date, market) {
-    const marketConfig = this.config.getMarketConfig(market);
-    const timezone = marketConfig.timezone || 'Asia/Shanghai';
-    
-    const parts = this.getMarketTimeParts(date, timezone);
-    return `${parts.year}-${parts.month}-${parts.day}`;
+  async getAllMarketStatusText() {
+    return await getAllMarketStatusText();
   }
 }

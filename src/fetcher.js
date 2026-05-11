@@ -56,14 +56,19 @@ export class Fetcher {
     }
 
     // 基金数据是JSON格式，需要特殊处理
+    // 港股数据是腾讯格式，需要特殊处理
     let data;
     if (stock.market === 'cn_fund') {
       data = await response.json();
+    } else if (stock.market === 'hk') {
+      // 腾讯API返回GBK编码的中文，需要特殊处理
+      const buffer = await response.arrayBuffer();
+      const decoder = new TextDecoder('gbk');
+      const text = decoder.decode(buffer);
+      data = this.parseTencentHK(text);
     } else {
       data = await response.json();
     }
-
-    console.log(`Fetched data for ${stock.code}:`, JSON.stringify(data).substring(0, 200));
 
     // 解析数据
     return this.parseData(data, stock, marketConfig);
@@ -81,6 +86,34 @@ export class Fetcher {
   }
 
   /**
+   * 解析腾讯港股格式
+   */
+  parseTencentHK(text) {
+    // 格式: v_hk07709="100~名称~代码~价格~昨收~..."
+    // 注意：数据可能包含特殊字符，用 [^"]+ 匹配到第一个引号
+    const match = text.match(/v_hk\d+="([^"]+)"/);
+    if (!match) {
+      console.error('parseTencentHK: no match, text:', text.substring(0, 100));
+      return null;
+    }
+
+    const parts = match[1].split('~');
+    const price = parseFloat(parts[3]);
+    const prevClose = parseFloat(parts[4]);
+    const change = price - prevClose;
+    const changePercent = prevClose ? (change / prevClose) * 100 : 0;
+
+    return {
+      name: parts[1],
+      code: parts[2],
+      price: this.formatPrice(price),
+      prev_close: this.formatPrice(prevClose),
+      change_amount: this.formatPrice(change),
+      change_percent: this.formatPercent(changePercent)
+    };
+  }
+
+  /**
    * 获取请求头
    */
   getHeaders(market) {
@@ -92,15 +125,23 @@ export class Fetcher {
       'Connection': 'keep-alive',
     };
 
-    // A股基金：东财API拒绝桌面UA，必须用移动端UA
+    // A股基金：东财API拒绝桌面UA，必须用移动端UA，且不支持br压缩
     if (market === 'cn_fund') {
       headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 12; SM-G9910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+      headers['Accept-Encoding'] = 'gzip, deflate';  // 不接受br压缩，CF Workers可正确解压
     }
 
-    // 韩股需要 Referer
+    // 港股需要 Referer，不支持br压缩
+    if (market === 'hk') {
+      headers['Referer'] = 'https://finance.qq.com/';
+      headers['Accept-Encoding'] = 'gzip, deflate';
+    }
+
+    // 韩股需要 Referer，不支持br压缩
     if (market === 'kr') {
       headers['Referer'] = 'https://m.stock.naver.com/';
       headers['Origin'] = 'https://m.stock.naver.com';
+      headers['Accept-Encoding'] = 'gzip, deflate';
     }
 
     // 美股 Yahoo Finance 需要 Referer
@@ -131,7 +172,11 @@ export class Fetcher {
         result = this.parseCNFund(data, result);
         break;
       case 'hk':
-        result = this.parseHK(data, result);
+        // 腾讯格式已在 fetchStock 中通过 parseTencentHK 解析
+        // data 已经是完整结果，直接合并
+        if (data && data.price !== undefined) {
+          result = { ...result, ...data };
+        }
         break;
       case 'kr':
         result = this.parseKR(data, result);
